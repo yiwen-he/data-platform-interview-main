@@ -1,0 +1,11 @@
+version: 2
+
+models:
+  - name: stg_tenants
+    description: "Example staging model over raw_tenants. Replace as you see fit."
+    columns:
+      - name: tenant_id
+        description: "Primary key for a tenant."
+        tests:
+          - unique
+          - not_null

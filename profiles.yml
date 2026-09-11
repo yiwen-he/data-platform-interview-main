@@ -1,0 +1,7 @@
+ticketure_takehome:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "target/ticketure.duckdb"
+      threads: 4
