@@ -2,10 +2,247 @@ version: 2
 
 models:
   - name: stg_tenants
-    description: "Example staging model over raw_tenants. Replace as you see fit."
     columns:
       - name: tenant_id
-        description: "Primary key for a tenant."
         tests:
           - unique
           - not_null
+      - name: tenant_name
+        tests:
+          - not_null
+      - name: created_at_utc
+      - name: _dbt_run_started_at
+      - name: _dbt_invocation_id
+
+  - name: stg_venues
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - tenant_id
+              - venue_id
+    columns:
+      - name: venue_id
+        tests:
+          - not_null
+      - name: tenant_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_tenants')
+                field: tenant_id
+      - name: venue_name
+        tests:
+          - not_null
+      - name: timezone
+      - name: capacity
+      - name: _dbt_run_started_at
+      - name: _dbt_invocation_id
+
+  - name: stg_events
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - tenant_id
+              - event_id
+    columns:
+      - name: event_id
+        tests:
+          - not_null
+      - name: tenant_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_tenants')
+                field: tenant_id
+      - name: venue_id
+        tests:
+          - not_null
+          - tenant_scoped_relationship:
+              arguments:
+                to: ref('stg_venues')
+                field: venue_id
+      - name: event_name
+        tests:
+          - not_null
+      - name: event_start_utc
+      - name: _dbt_run_started_at
+      - name: _dbt_invocation_id
+
+  - name: stg_customers
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - tenant_id
+              - customer_id
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+      - name: tenant_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_tenants')
+                field: tenant_id
+      - name: country_code
+      - name: created_at_utc
+      - name: _dbt_run_started_at
+      - name: _dbt_invocation_id
+
+  - name: stg_orders
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - tenant_id
+              - order_id
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "gross_amount >= 0"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "fee_amount >= 0"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "tax_amount >= 0"
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+      - name: tenant_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_tenants')
+                field: tenant_id
+      - name: customer_id
+        tests:
+          - not_null
+          - tenant_scoped_relationship:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: event_id
+        tests:
+          - not_null
+          - tenant_scoped_relationship:
+              arguments:
+                to: ref('stg_events')
+                field: event_id
+      - name: order_status
+      - name: gross_amount
+      - name: fee_amount
+      - name: tax_amount
+      - name: currency
+      - name: created_at_utc
+      - name: _dbt_run_started_at
+      - name: _dbt_invocation_id
+
+  - name: stg_tickets
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - tenant_id
+              - ticket_id
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "price >= 0"
+    columns:
+      - name: ticket_id
+        tests:
+          - not_null
+      - name: tenant_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_tenants')
+                field: tenant_id
+      - name: order_id
+        tests:
+          - not_null
+          - tenant_scoped_relationship:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: event_id
+        tests:
+          - not_null
+          - tenant_scoped_relationship:
+              arguments:
+                to: ref('stg_events')
+                field: event_id
+      - name: ticket_status
+      - name: price
+      - name: _dbt_run_started_at
+      - name: _dbt_invocation_id
+
+
+  - name: stg_refunds
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - tenant_id
+              - refund_id
+    columns:
+      - name: refund_id
+        tests:
+          - not_null
+      - name: tenant_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_tenants')
+                field: tenant_id
+      - name: order_id
+        tests:
+          - not_null
+          - tenant_scoped_relationship:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: refund_amount
+      - name: refund_status
+      - name: created_at_utc
+      - name: _dbt_run_started_at
+      - name: _dbt_invocation_id
+
+  - name: stg_scans
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - tenant_id
+              - scan_id
+    columns:
+      - name: scan_id
+        tests:
+          - not_null
+      - name: tenant_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_tenants')
+                field: tenant_id
+      - name: ticket_id
+        tests:
+          - not_null
+          - tenant_scoped_relationship:
+              arguments:
+                to: ref('stg_tickets')
+                field: ticket_id
+      - name: scanned_at_utc
+      - name: gate
+      - name: _dbt_run_started_at
+      - name: _dbt_invocation_id

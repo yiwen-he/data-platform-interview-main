@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: int_date
+
+  - name: int_tenant
+
+  - name: int_customer
+  - name: int_venue
+
+  - name: int_event
+
+  - name: int_order
+
+  - name: int_refund
+
+  - name: int_ticket
+
+  - name: int_scan
+
+  - name: int_tenant_currency
+    description:
+      One row per tenant with the home currency supplied by BUSINESS_CONTEXT.md.
+      This centralizes the exercise's business configuration so currency rules are
+      not repeated across facts and reporting models.
+
+  - name: int_completed_refunds_by_order
+
+  - name: int_ticket_summary_by_order

@@ -86,29 +86,128 @@ We are not assessing dashboards, exhaustive coverage, or polish for its own sake
 
 ## What I built
 
-_List your models and the grain of each. e.g. "`fct_ticket_sales` — one row
-per ticket."_
+#### Seeds
+
+- Added `_seeds.yml` to define seed files, columns, and tests
+
+#### Staging
+
+- Added 8 cleaned staging models, one for each raw seed, referenced via `ref()`
+- Column value cleaned with functions such as `trim()`, `nullif()`, `upper()` where appropriate
+- Deduplication with the existing available datatime column `created_at_utc`, pending confirmation from stakeholders on deterministic datetime column such as `updated_at` from source system
+- Incoporate dbt audit columns such as `_dbt_run_started_at` and ` _dbt_invocation_id` through the use of macros
+- Added `_staging.yml` to define staging models, columns, and tests
+- `stg_customers` deliberately exposes only the non-PII fields needed to validate tenant ownership of orders and publish `dim_customer`
+
+#### Intermediate
+
+Added:
+- 8 intermediate models transform cleaned staging models into reusable, tenant-safe models with conformed keys, validated relationships, and business attributes for downstream mart models and snapshots
+- `int_tenant_currency` manually with one row per tenant with its configured home currency, the information is supplied by docs/BUSINESS_CONTEXT.md
+- `int_completed_refunds_by_order` to aggregate completed refunds by tenant and order
+- `int_date` to create one row per calendar date from 2023-01-01 through 2999-12-31 for reuse 
+- `_intermediate.yml` to define intermediate models, columns, and tests
+
+#### Mart models
+
+Added:
+- `dim_tenant` - One row per tenant, including its surrogate key, source tenant ID, tenant name, and configured home currency
+- `dim_customer` - One row per tenant-scoped customer. Direct PII is omitted. Retains the customer key, source customer ID, country, and creation date 
+- `dim_venue` - One row per tenant-scoped venue, containing reusable venue attributes such as name, city, timezone, and capacity
+- `dim_event` - One row per tenant-scoped event, connected to its tenant, venue, and event date through conformed warehouse keys
+- `dim_date` - Shared, non-tenant dimension with one row per calendar date from 2023-01-01 through 2999-12-31 for reuse
+- `fct_ticket` - One row per tenant-scoped ticket, including its price, currency, status, and relationships to the order and event
+- `fct_refund` - One row per tenant-scoped refund, including its amount, currency, status, and relationship to the related order
+- `fct_event_entry` - One row per event-entry scan attempt, connected to the tenant, ticket, order, event, and scan date. Renamed from scan to event_entry to provide more clarity to business
+- `fct_order_revenue` - Fact table on completed order, with gross revenue, platform fees, tax, completed refunds, and net revenue at the order grain
+- `rpt_tenant_event_revenue` - Reporting table aggregates revenue per tenant, event, and currency
+- `rpt_tenant_revenue` - Reporting table aggregates revenue per tenant and currency
+- `_mart.yml` - Defines mart models, columns, and tests
+
+### Snapshots
+
+Added:
+- `snap_order_status` — Tracks order status change as SCD2 history using dbt snapshots
+- `snap_refund_status` — Tracks refund status change as SCD2 history using dbt snapshots
+- `snap_ticket_status` — Tracks ticket status change as SCD2 history using dbt snapshots
+- `_snapshots.yml` — Defines snapshot models
+
+####  Macros
+
+- `dbt_audit_columns` — macro to generate consistent dbt run-start and invocation metadata
+- `test_tenant_scoped_relationship` — macro to validate relationships using both tenant and entity identifiers
+
+#### Tests
+
+- `test_no_refund_predates_order` — Detects refunds timestamped before their parent orders
+
+#### Other changes
+
+- `dbt_project` - Added date variables for data table creation, added schema configurations, and use warning as test defaults
+
 
 ## Assumptions
 
-_What did you assume about ambiguous or messy data, and why?_
+- For deduplication, the row with the latest `created_at_utc` is assumed to be the authoritative record. Deduplication uses `row_number()` odered by that timestamp descending. This is a temporary proxy for record recency becase no `updated_at` or warehouse ingestion timestamp is provided
+- Entity IDs (such as customer id) are assumed to be tenant-scoped even though most happen to be globally unique in this sample
+- The T1/USD and T2/GBP mappings in `BUSINESS_CONTEXT.md` are treated as the authoritative tenant configuration for this exercise. An intermediate table is created on this basis for fct table calculation
+- A completed order is included in trusted revenue only when it is mapped to a known tenant, and its currency matches that tenant's configured home currency. Rows that fail these requirements are excluded rather than attributed or converted by inference
 
 ## Reconciliation
 
-_Did your T1 net revenue match Finance's `$271.00`? If not, what was the gap and what caused it? What did you conclude about T2, and what would you need to trust a T2 number?_
+T1 reconciles exactly to Finance's **$271.00**:
+
+- O1: `200 gross − 15 tax − 80 completed refunds = 105 USD`
+- O2: `100 gross − 8 tax − 0 completed refunds = 92 USD`
+- O3: Cancelled
+- O7: Pending
+- O8: `0 gross − 0 tax − 0 completed refunds = 0 USD`
+- O10: `80 gross − 6 tax − 0 completed refunds = 74 USD`
+- Tenant total: `105 + 92 + 74 = 271 USD`, matches Finance number of `0 USD`
+- This can be confirmed within the mart table `rpt_tenant_revenue` where T1 reaches a net revenue amount of $271
+
+The trusted net revenue for T2 is **410 GBP** from orders O4 and O9:
+`550 gross - 40 tax - 100 completed refunds`. 
+It cannot reconcill easily because:
+- Order O5 is recorded in EUR despite T2's GBP home currency
+- Order O6 and cannot be attributed to either T1 or T2
+To trust a final T2 number, Finance/source owners must confirm O5's currency and FX treatment, establish O6's tenant through an authoritative source correction, and explain the O5 over-refund and O9 ticket-total difference
 
 ## Data I would question
 
-_Anything you found that looks wrong, contradictory, or impossible across the source tables, and what you'd ask the source-system owners._
+- Refund `R1` appeared twice in the seed file. I would ask whether there is any known error in the landing process and if there is an ingestion metadata column that can provide a more robust deduplication order. This can be followed up with the source-system owners on an authoritative column such as `updated_at` for deterministic deduplication
+- Refund `R4` predates order `O1`. I would ask whether this is a timestamp defect, an order migration, or an expected pre-order adjustment
+- T2 order `O5` is in EUR although T2's documented home currency is GBP. Its refund has no currency, so I would ask for the authoritative currency and FX treatment before including it in a tenant total
+- No exchange-rate table is supplied. If a currency other than the home currency of the tenant is accepted in the source system, we would require an exchange-rate table for the currency conversion
+- Refund `R5` is 150 against order `O5` gross revenue of 100. I would ask whether refunds can include fees, multiple orders, or external adjustments
+- Order `O6` and ticket `TK9` have no tenant ID. Their related records suggest T2, but that is not sufficient evidence for a tenant-facing data product
+- Order `O9` has gross revenue of 250 but only 200 of ticket prices. I would ask whether order gross can include non-ticket products or whether a ticket is missing
+- Scan `S6` refers to nonexistent ticket `TK999`. There are also scans of an exchanged ticket and a cancelled ticket, plus three scans for `TK1`. I would ask whether scans represent attempts or admissions and which scan is correct
+- Venue `V2` has no timezone, preventing trustworthy local-time reporting for its events
+- Customer email is repeated both within `T1` and across tenants, so it cannot be treated as a customer key or used for cross-tenant identity matching
+- If the reporting is for tenant consumption directly, I would check with the tenant whether a conversion to their local time is needed
+- Customer SCD2 history has not been implemented because direct PII such as email and full name is deliberately excluded from the current models. If historical customer attributes become a business requirement, I would add a targeted snapshot with appropriate privacy and access controls
 
 ## Trade-offs
 
-_What did you deliberately simplify or leave out given the time budget?_
+- Direct customer PII (`email` and `full_name`) is omitted from `stg_customers` because the revenue use case does not need it. In production, raw PII would additionally be protected by restricted schemas, classification tags, masking policies, and audited roles; hashing alone would not make it non-sensitive
+- Data-quality tests currently produce warnings so the supplied project can complete `dbt build`. However, warnings do not prevent downstream processing. In Production, critical tenant-isolation and currency-validation failures should be blocking errors, with invalid records quarantined before publication
+- `tenant_scoped_relationship` was created to validate relationships using both tenant and entity identifiers, preventing records from different tenants being linked when they share the same entity ID
+- `int_tenant_currency` is hard-coded based on the two mappings supplied in the business context. In Production this configuration should come from a governed reference table or tenant-management source
 
 ## How I would productionise this
-
-_CI/CD, environments, scheduling, monitoring, deployment controls._
+- Replace CSV seeds with ingestion from source systems that captures reliable change timestamps and ingestion metadata
+- Obtain and use the source system owned update/ingestion column for landing data deduplication  
+- Improve the project’s metadata coverage by adding clear descriptions and data types for every column in the YAML files, making the models easier to understand, govern, and consume through dbt documentation
+- Run `dbt build` and SQL linting in pull requests against an isolated CI schema, require review and pass all tests before merge
+- Orchestrate dbt jobs based on ingestion load or business requirement with appropriate business tolling
+- Build alerts on freshness, blocking test failures, warning-count changes, reconciliation drift. Create investigation runbooks, and process for notifying affected consumers
+- Secure tenant reporting in Snowflake using row access policies and tenant-specific data shares. Allow tenants to access only their own published reports, and test that other tenants’ data and underlying tables remain inaccessible
+- Treat this as a data product by adding an end-to-end architecture and lineage diagram, clear ownership and data contracts, metric definitions, freshness expectations, access controls, operational runbooks, and consumer-facing documentation
 
 ## What I would do with more time
 
-_The honest "next 5 things" list._
+- Improve the project’s metadata coverage by adding clear descriptions and data types for every column in the YAML files, making the models easier to understand, govern, and consume through dbt documentation
+- Add governed exposures, ownership metadata, contracts, and role-based masking for any future customer data product
+- Treat this as a data product by adding an end-to-end architecture and lineage diagram, clear ownership and data contracts, metric definitions, freshness expectations, access controls, operational runbooks, and consumer-facing documentation
+- If production data load is in large volume, consider incremental loading to reduce processing time and warehouse costs, supported by reliable change-tracking fields, late-arriving data handling, and periodic full-refresh validation

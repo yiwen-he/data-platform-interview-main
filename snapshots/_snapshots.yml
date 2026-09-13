@@ -1,0 +1,14 @@
+version: 2
+
+snapshots:
+  - name: snap_order_status
+    description:
+      Status-only SCD2 history for orders. 
+
+  - name: snap_refund_status
+    description: 
+      Status-only SCD2 history for refunds. 
+
+  - name: snap_ticket_status
+    description: 
+      Status-only SCD2 history for tickets
