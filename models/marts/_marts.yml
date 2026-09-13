@@ -1,0 +1,301 @@
+version: 2
+
+models:
+  - name: dim_tenant
+    columns:
+      - name: tenant_key
+        tests:
+          - unique
+          - not_null
+      - name: tenant_id
+        tests:
+          - unique
+          - not_null
+      - name: tenant_name
+        tests:
+          - not_null
+      - name: home_currency
+      - name: created_at_utc
+
+  - name: dim_date
+    columns:
+      - name: date_key
+      - name: date_day
+      - name: day_of_month
+      - name: day_name
+      - name: week_of_year
+      - name: month_number
+      - name: month_name
+      - name: quarter_number
+      - name: year_number
+      - name: week_start_date
+      - name: month_start_date
+      - name: quarter_start_date
+      - name: year_start_date
+      - name: is_weekend
+
+  - name: dim_customer
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [tenant_id, customer_id]
+    columns:
+      - name: customer_key
+        tests:
+          - unique
+          - not_null
+      - name: customer_id
+        tests:
+          - not_null
+      - name: tenant_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tenant')
+                field: tenant_key
+      - name: tenant_id
+        tests:
+          - not_null
+      - name: customer_created_date_key
+      - name: country_code
+      - name: created_at_utc
+
+  - name: dim_venue
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [tenant_id, venue_id]
+    columns:
+      - name: venue_key
+        tests:
+          - unique
+          - not_null
+      - name: venue_id
+        tests:
+          - not_null
+      - name: tenant_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tenant')
+                field: tenant_key
+      - name: tenant_id
+        tests:
+          - not_null
+      - name: venue_name
+      - name: timezone
+      - name: capacity
+
+  - name: dim_event
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [tenant_id, event_id]
+    columns:
+      - name: event_key
+        tests:
+          - unique
+          - not_null
+      - name: event_id
+        tests:
+          - not_null
+      - name: tenant_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tenant')
+                field: tenant_key
+      - name: tenant_id
+        tests:
+          - not_null
+      - name: venue_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_venue')
+                field: venue_key
+      - name: event_date_key
+      - name: event_name
+      - name: event_start_utc
+
+  - name: fct_refund
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [tenant_id, refund_id]
+    columns:
+      - name: refund_key
+        description: "Warehouse key generated from tenant_id and refund_id."
+        tests:
+          - unique
+          - not_null
+      - name: refund_id
+        tests:
+          - not_null
+      - name: tenant_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tenant')
+                field: tenant_key
+      - name: tenant_id
+        tests:
+          - not_null
+      - name: refund_created_date_key
+      - name: refund_amount
+      - name: currency
+      - name: refund_status
+      - name: refund_created_at_utc
+
+  - name: fct_ticket
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [tenant_id, ticket_id]
+    columns:
+      - name: ticket_key
+        tests:
+          - unique
+          - not_null
+      - name: ticket_id
+        tests:
+          - not_null
+      - name: tenant_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tenant')
+                field: tenant_key
+      - name: tenant_id
+        tests:
+          - not_null
+      - name: order_key
+        tests:
+          - not_null
+      - name: event_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_event')
+                field: event_key
+      - name: price
+      - name: currency
+      - name: ticket_status
+
+  - name: fct_event_entry
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [tenant_id, scan_id]
+    columns:
+      - name: scan_key
+        tests:
+          - unique
+          - not_null
+      - name: scan_id
+        tests:
+          - not_null
+      - name: tenant_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tenant')
+                field: tenant_key
+      - name: tenant_id
+        tests:
+          - not_null
+      - name: ticket_key
+        tests:
+          - not_null
+      - name: order_key
+        tests:
+          - not_null
+      - name: event_key
+        tests:
+          - not_null
+      - name: scan_date_key
+      - name: scanned_at_utc
+      - name: gate
+
+  - name: fct_order_revenue
+    columns:
+      - name: order_key
+        tests:
+          - unique
+          - not_null
+      - name: order_id
+        tests:
+          - not_null
+      - name: tenant_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tenant')
+                field: tenant_key
+      - name: tenant_id
+        tests:
+          - not_null
+      - name: event_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_event')
+                field: event_key
+      - name: customer_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customer')
+                field: customer_key
+      - name: order_date_key
+      - name: currency
+      - name: tax_amount
+      - name: completed_refund_amount
+      - name: net_revenue_amount
+
+  - name: rpt_tenant_event_revenue
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [tenant_key, event_key, currency]
+    columns:
+      - name: tenant_key
+        tests:
+          - not_null
+      - name: tenant_id
+        tests:
+          - not_null
+      - name: event_key
+        tests:
+          - not_null
+      - name: event_id
+        tests:
+          - not_null
+      - name: currency
+      - name: net_revenue_amount
+
+  - name: rpt_tenant_revenue
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [tenant_key, currency]
+    columns:
+      - name: tenant_key
+        tests:
+          - not_null
+      - name: tenant_id
+        tests:
+          - not_null
+      - name: currency
+      - name: net_revenue_amount

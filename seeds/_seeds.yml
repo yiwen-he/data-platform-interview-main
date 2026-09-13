@@ -1,0 +1,95 @@
+version: 2
+
+seeds:
+  - name: raw_tenants
+    columns:
+      - name: tenant_id
+        tests:
+          - unique
+          - not_null
+      - name: tenant_name
+      - name: created_at_utc
+
+  - name: raw_venues
+    columns:
+      - name: venue_id
+        tests:
+          - not_null
+      - name: tenant_id
+        tests:
+          - not_null
+      - name: venue_name
+      - name: city
+      - name: timezone
+      - name: capacity
+
+  - name: raw_events
+    columns:
+      - name: event_id
+        tests:
+          - not_null
+      - name: tenant_id
+      - name: venue_id
+      - name: event_name
+      - name: event_start_utc
+
+  - name: raw_customers
+    config:
+      meta:
+        contains_pii: true
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+      - name: tenant_id
+      - name: email
+      - name: full_name
+      - name: country
+      - name: created_at_utc
+
+  - name: raw_orders
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+      - name: tenant_id
+      - name: customer_id
+      - name: event_id
+      - name: order_status
+      - name: gross_amount
+      - name: fee_amount
+      - name: tax_amount
+      - name: currency
+      - name: created_at_utc
+
+  - name: raw_tickets
+    columns:
+      - name: ticket_id
+        tests:
+          - not_null
+      - name: order_id
+      - name: tenant_id
+      - name: event_id
+      - name: ticket_status
+      - name: price
+
+  - name: raw_refunds
+    columns:
+      - name: refund_id
+        tests:
+          - not_null
+      - name: order_id
+      - name: tenant_id
+      - name: refund_amount
+      - name: refund_status
+      - name: created_at_utc
+
+  - name: raw_scans
+    columns:
+      - name: scan_id
+        tests:
+          - not_null
+      - name: ticket_id
+      - name: tenant_id
+      - name: scanned_at_utc
+      - name: gate

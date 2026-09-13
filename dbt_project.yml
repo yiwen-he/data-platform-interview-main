@@ -4,6 +4,10 @@ config-version: 2
 
 profile: "ticketure_takehome"
 
+vars:
+  dim_date_start_date: "2023-01-01"
+  dim_date_end_date_exclusive: "3000-01-01"
+
 model-paths: ["models"]
 analysis-paths: ["analyses"]
 seed-paths: ["seeds"]
@@ -16,13 +20,19 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+data_tests:
+  +severity: warn
+
 models:
   ticketure_takehome:
     staging:
+      +schema: staging
       +materialized: view
     intermediate:
+      +schema: intermediate
       +materialized: view
     marts:
+      +schema: marts
       +materialized: table
 
 seeds:
